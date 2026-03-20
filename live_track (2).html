@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Navigator</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{
+  --blue:#1a73e8;--blue-dk:#1558b0;--blue-lt:#e8f0fe;
+  --green:#0f9d58;--green-lt:#e6f4ea;
+  --red:#ea4335;--yellow:#fbbc04;
+  --surf:#fff;--bg:#f5f5f5;
+  --t1:#202124;--t2:#5f6368;--t3:#9aa0a6;
+  --bdr:#e0e0e0;
+  --sh:0 2px 6px rgba(0,0,0,.18),0 1px 2px rgba(0,0,0,.12);
+  --sh-lg:0 4px 20px rgba(0,0,0,.2),0 2px 6px rgba(0,0,0,.12);
+  --r:8px;
+}
+html,body{height:100%;font-family:'Roboto',sans-serif;overflow:hidden;background:var(--bg);color:var(--t1);}
+
+/* MAP */
+#map{position:fixed;inset:0;z-index:0;}
+
+/* LOADING BAR */
+#lbar{position:fixed;top:0;left:0;height:3px;z-index:9990;
+  background:var(--blue);width:0%;transition:width .35s ease;
+  box-shadow:0 0 8px rgba(26,115,232,.5);}
+
+/* ══════════════════════════════
+   TOP BAR
+══════════════════════════════ */
+.topbar{
+  position:fixed;top:10px;left:50%;transform:translateX(-50%);
+  width:calc(100% - 20px);max-width:500px;
+  z-index:500;display:flex;flex-direction:column;gap:6px;
+}
+
+/* Search input card */
+.search-card{
+  background:var(--surf);border-radius:24px;
+  box-shadow:var(--sh-lg);
+  display:flex;align-items:center;padding:0 10px 0 14px;height:52px;gap:8px;
+  position:relative;
+}
+.search-card.focused{border-radius:16px 16px 0 0;box-shadow:var(--sh-lg);}
+.sc-left{flex-shrink:0;display:flex;align-items:center;}
+.sc-divider{width:1px;height:24px;background:var(--bdr);margin:0 2px;}
+.sc-input-wrap{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;}
+
+/* Destination label (shown when not editing) */
+#destDisplay{cursor:pointer;padding:4px 0;}
+.dest-title{font-size:.95rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t1);}
+.dest-sub{font-size:.72rem;color:var(--t2);margin-top:1px;}
+
+/* Search input (hidden until tapped) */
+#searchInput{
+  display:none;width:100%;border:none;outline:none;
+  font-family:'Roboto',sans-serif;font-size:.95rem;font-weight:500;
+  color:var(--t1);background:transparent;
+  padding:4px 0;
+}
+#searchInput::placeholder{color:var(--t3);font-weight:400;}
+
+.sc-right{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+.ic-btn{
+  width:36px;height:36px;border:none;background:transparent;cursor:pointer;
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  transition:background .15s;
+}
+.ic-btn:hover{background:var(--bg);}
+.ic-btn:active{background:var(--bdr);}
+.status-badge{
+  padding:4px 10px;border-radius:99px;font-size:.72rem;font-weight:500;
+  background:var(--blue-lt);color:var(--blue);white-space:nowrap;flex-shrink:0;
+  transition:background .3s,color .3s;
+}
+.status-badge.nav{background:var(--green-lt);color:var(--green);}
+
+/* Suggestions dropdown */
+#suggestions{
+  display:none;position:absolute;top:100%;left:0;right:0;
+  background:var(--surf);border-radius:0 0 16px 16px;
+  box-shadow:0 8px 20px rgba(0,0,0,.18);
+  overflow:hidden;z-index:510;
+  max-height:280px;overflow-y:auto;
+}
+#suggestions.show{display:block;}
+.sug-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 16px;cursor:pointer;
+  transition:background .12s;border-top:1px solid var(--bdr);
+}
+.sug-item:first-child{border-top:none;}
+.sug-item:hover,.sug-item:active{background:#f8f9fa;}
+.sug-icon{
+  width:36px;height:36px;border-radius:50%;background:#f1f3f4;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.sug-text{flex:1;min-width:0;}
+.sug-name{font-size:.88rem;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sug-addr{font-size:.74rem;color:var(--t2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sug-loading{padding:16px;text-align:center;font-size:.85rem;color:var(--t2);}
+.sug-none{padding:16px;text-align:center;font-size:.85rem;color:var(--t2);}
+
+/* TURN CARD */
+#turnCard{
+  background:var(--blue);color:#fff;border-radius:14px;
+  padding:11px 16px;display:none;align-items:center;gap:12px;
+  box-shadow:0 4px 12px rgba(26,115,232,.4);
+}
+#turnCard.show{display:flex;}
+.turn-arrow{font-size:1.6rem;flex-shrink:0;min-width:28px;text-align:center;}
+.turn-body{flex:1;}
+.turn-main{font-size:.9rem;font-weight:500;}
+.turn-dist-txt{font-size:.75rem;opacity:.85;margin-top:1px;}
+
+/* FAB */
+.fab-col{
+  position:fixed;right:12px;z-index:400;
+  display:flex;flex-direction:column;gap:8px;
+  bottom:calc(230px + env(safe-area-inset-bottom));
+}
+.fab{
+  width:44px;height:44px;border-radius:50%;
+  background:var(--surf);border:none;cursor:pointer;
+  box-shadow:var(--sh-lg);
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .12s,background .15s;
+}
+.fab:active{transform:scale(.9);}
+
+/* BOTTOM SHEET */
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:300;
+  background:var(--surf);
+  border-radius:18px 18px 0 0;
+  box-shadow:0 -3px 18px rgba(0,0,0,.14);
+  padding:0 0 env(safe-area-inset-bottom);
+  max-height:62vh;overflow:hidden;
+}
+.sheet-drag{width:36px;height:4px;background:var(--bdr);border-radius:99px;margin:10px auto 0;}
+
+/* PRE-TRIP */
+#prePanel{padding:14px 18px 20px;}
+.dest-row{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--bdr);margin-bottom:14px;}
+.dest-bubble{width:40px;height:40px;border-radius:50%;background:#fce8e6;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.dest-nm{font-size:.95rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dest-co{font-size:.75rem;color:var(--t2);margin-top:2px;}
+.change-dest-btn{
+  margin-left:auto;flex-shrink:0;
+  border:1px solid var(--blue);background:transparent;
+  color:var(--blue);border-radius:99px;padding:6px 14px;
+  font-family:'Roboto',sans-serif;font-size:.78rem;font-weight:500;cursor:pointer;
+  transition:background .15s;
+}
+.change-dest-btn:hover{background:var(--blue-lt);}
+
+.route-pills{display:flex;gap:8px;margin-bottom:14px;}
+.rpill{flex:1;background:var(--bg);border-radius:var(--r);padding:10px;text-align:center;}
+.rpill-v{font-size:1.05rem;font-weight:700;}
+.rpill-l{font-size:.65rem;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+
+.start-btn{
+  width:100%;height:52px;border:none;border-radius:28px;
+  background:var(--blue);color:#fff;
+  font-family:'Roboto',sans-serif;font-size:1rem;font-weight:500;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 2px 10px rgba(26,115,232,.35);
+  transition:background .18s,transform .1s;
+}
+.start-btn:active{transform:scale(.98);}
+.start-btn:disabled{background:var(--t3);box-shadow:none;cursor:not-allowed;}
+
+/* TRIP PANEL */
+#tripPanel{display:none;padding:12px 18px 16px;}
+.trip-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;}
+.eta-big{font-size:1.7rem;font-weight:700;line-height:1;}
+.eta-sub{font-size:.8rem;color:var(--t2);margin-top:3px;}
+.stop-btn{
+  border:1px solid var(--bdr);background:var(--surf);
+  border-radius:99px;padding:8px 18px;
+  font-family:'Roboto',sans-serif;font-size:.85rem;font-weight:500;
+  color:var(--red);cursor:pointer;transition:background .15s;
+}
+.stop-btn:active{background:#fce8e6;}
+
+.prog-row{margin-bottom:12px;}
+.prog-labels{display:flex;justify-content:space-between;font-size:.73rem;color:var(--t2);margin-bottom:5px;}
+.prog-track{height:5px;background:var(--bdr);border-radius:99px;overflow:hidden;}
+.prog-fill{height:100%;width:0%;border-radius:99px;background:linear-gradient(90deg,var(--blue),#34a853);transition:width .6s ease;}
+
+.trip-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.tstat{background:var(--bg);border-radius:var(--r);padding:8px 10px;text-align:center;}
+.tstat-v{font-size:.95rem;font-weight:700;}
+.tstat-l{font-size:.64rem;color:var(--t2);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;}
+.tstat.hi .tstat-v{color:var(--blue);}
+
+/* ARRIVED */
+#arrivedOverlay{
+  display:none;position:fixed;inset:0;z-index:9999;
+  background:rgba(32,33,36,.65);align-items:flex-end;justify-content:center;
+}
+#arrivedOverlay.show{display:flex;animation:fadeUp .35s ease;}
+.arrived-card{
+  background:var(--surf);border-radius:18px 18px 0 0;
+  width:100%;max-width:500px;
+  padding:28px 24px calc(32px + env(safe-area-inset-bottom));
+  text-align:center;
+}
+.arr-icon{width:64px;height:64px;border-radius:50%;background:var(--green-lt);margin:0 auto 16px;display:flex;align-items:center;justify-content:center;}
+.arr-t{font-size:1.4rem;font-weight:700;margin-bottom:6px;}
+.arr-s{font-size:.88rem;color:var(--t2);margin-bottom:24px;}
+.arr-btn{width:100%;height:52px;border:none;border-radius:28px;background:var(--blue);color:#fff;font-family:'Roboto',sans-serif;font-size:1rem;font-weight:500;cursor:pointer;}
+
+/* SNACKBAR */
+#snack{
+  position:fixed;bottom:calc(240px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(12px);
+  background:var(--t1);color:#fff;border-radius:8px;
+  padding:10px 18px;font-size:.84rem;z-index:9001;
+  opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;max-width:calc(100% - 40px);text-align:center;
+}
+#snack.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* OVERLAY to close suggestions on outside tap */
+#sugOverlay{display:none;position:fixed;inset:0;z-index:490;}
+#sugOverlay.show{display:block;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
+@keyframes pulse-ring{0%{transform:scale(.8);opacity:.8}100%{transform:scale(2.2);opacity:0}}
+.u-ring{animation:pulse-ring 2s infinite ease-out;}
+
+/* LEAFLET tweaks */
+.leaflet-control-zoom{border:none!important;border-radius:var(--r)!important;box-shadow:var(--sh)!important;}
+.leaflet-control-zoom a{border:none!important;color:var(--t1)!important;}
+.leaflet-control-zoom a:first-child{border-radius:var(--r) var(--r) 0 0!important;}
+.leaflet-control-zoom a:last-child{border-radius:0 0 var(--r) var(--r)!important;border-top:1px solid var(--bdr)!important;}
+.leaflet-control-attribution{display:none!important;}
+.leaflet-popup-content-wrapper{border-radius:12px!important;box-shadow:var(--sh-lg)!important;font-family:'Roboto',sans-serif!important;font-size:.88rem!important;}
+.leaflet-popup-tip-container{display:none!important;}
+
+@media(min-width:600px){
+  .sheet{max-width:380px;left:14px;right:auto;border-radius:18px;bottom:14px;box-shadow:var(--sh-lg);}
+  .fab-col{bottom:260px;}
+  #snack{bottom:280px;}
+}
+</style>
+</head>
+<body>
+
+<div id="lbar"></div>
+<div id="map"></div>
+<div id="sugOverlay" onclick="closeSearch()"></div>
+
+<!-- ══ TOP BAR ══ -->
+<div class="topbar">
+
+  <!-- Search card -->
+  <div class="search-card" id="searchCard">
+    <div class="sc-left">
+      <!-- Pin icon -->
+      <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13S19 14.25 19 9c0-3.87-3.13-7-7-7z" fill="#ea4335"/><circle cx="12" cy="9" r="2.5" fill="#fff"/></svg>
+    </div>
+    <div class="sc-divider"></div>
+
+    <div class="sc-input-wrap">
+      <!-- Display mode -->
+      <div id="destDisplay" onclick="openSearch()">
+        <div class="dest-title" id="destTitleTop">Destination Point</div>
+        <div class="dest-sub" id="destSubTop">Tap to search or change</div>
+      </div>
+      <!-- Input mode -->
+      <input id="searchInput" type="text" placeholder="Search destination…"
+        oninput="onSearchInput(this.value)"
+        onkeydown="onSearchKey(event)"/>
+    </div>
+
+    <div class="sc-right">
+      <!-- Clear / close button (shown during search) -->
+      <button class="ic-btn" id="clearBtn" style="display:none" onclick="closeSearch()" title="Close search">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="#5f6368"/></svg>
+      </button>
+      <!-- Status badge (hidden during search) -->
+      <div class="status-badge" id="statusBadge">Ready</div>
+    </div>
+
+    <!-- Suggestions dropdown -->
+    <div id="suggestions"></div>
+  </div>
+
+  <!-- Turn card (shown during navigation) -->
+  <div id="turnCard">
+    <div class="turn-arrow" id="turnArrow">↑</div>
+    <div class="turn-body">
+      <div class="turn-main" id="turnMain">Follow the route</div>
+      <div class="turn-dist-txt" id="turnDistTxt"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- FAB recenter -->
+<div class="fab-col">
+  <button class="fab" onclick="recenter()" title="My location">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="3.5" fill="#1a73e8"/>
+      <circle cx="12" cy="12" r="8" stroke="#1a73e8" stroke-width="1.5" fill="none"/>
+      <line x1="12" y1="2" x2="12" y2="5.5" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+      <line x1="12" y1="18.5" x2="12" y2="22" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+      <line x1="2" y1="12" x2="5.5" y2="12" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+      <line x1="18.5" y1="12" x2="22" y2="12" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+  </button>
+</div>
+
+<!-- ══ BOTTOM SHEET ══ -->
+<div class="sheet">
+  <div class="sheet-drag"></div>
+
+  <!-- Pre-trip -->
+  <div id="prePanel">
+    <div class="dest-row">
+      <div class="dest-bubble">
+        <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13S19 14.25 19 9c0-3.87-3.13-7-7-7z" fill="#ea4335"/><circle cx="12" cy="9" r="2.5" fill="#fff"/></svg>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div class="dest-nm" id="sheetDestName">Destination Point</div>
+        <div class="dest-co" id="sheetDestCoords">9.004707° N, 38.767063° E</div>
+      </div>
+      <button class="change-dest-btn" onclick="openSearch()">Change</button>
+    </div>
+
+    <div class="route-pills">
+      <div class="rpill"><div class="rpill-v" id="rDist">—</div><div class="rpill-l">Distance</div></div>
+      <div class="rpill"><div class="rpill-v" id="rTime">—</div><div class="rpill-l">Duration</div></div>
+      <div class="rpill"><div class="rpill-v" id="rTurns">—</div><div class="rpill-l">Turns</div></div>
+    </div>
+
+    <button class="start-btn" id="startBtn" onclick="startNav()" disabled>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+      <span id="startBtnLabel">Getting route…</span>
+    </button>
+  </div>
+
+  <!-- Active trip -->
+  <div id="tripPanel">
+    <div class="trip-top">
+      <div>
+        <div class="eta-big" id="etaBig">—</div>
+        <div class="eta-sub" id="etaSub">Calculating…</div>
+      </div>
+      <button class="stop-btn" onclick="stopNav()">✕ Stop</button>
+    </div>
+    <div class="prog-row">
+      <div class="prog-labels"><span>Trip progress</span><span id="progPct">0%</span></div>
+      <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+    </div>
+    <div class="trip-stats">
+      <div class="tstat hi"><div class="tstat-v" id="tsRem">—</div><div class="tstat-l">Remaining</div></div>
+      <div class="tstat"><div class="tstat-v" id="tsTrav">0 m</div><div class="tstat-l">Traveled</div></div>
+      <div class="tstat"><div class="tstat-v" id="tsSpd">—</div><div class="tstat-l">Speed</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ARRIVED -->
+<div id="arrivedOverlay">
+  <div class="arrived-card">
+    <div class="arr-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="#0f9d58"/></svg>
+    </div>
+    <div class="arr-t">You have arrived!</div>
+    <div class="arr-s" id="arrSub">You reached your destination.</div>
+    <button class="arr-btn" onclick="closeArrived()">Done</button>
+  </div>
+</div>
+
+<div id="snack"></div>
+
+<script>
+/* ═══════════════════════════════════════
+   CONFIG & STATE
+═══════════════════════════════════════ */
+let DEST = { lat: 9.004707, lng: 38.767063, name: 'Destination Point', addr: '9.004707° N, 38.767063° E' };
+const ARRIVE_M = 40;
+const OSRM     = 'https://router.project-osrm.org/route/v1/driving';
+const NOM      = 'https://nominatim.openstreetmap.org/search';
+
+let map, userMarker, accCircle, destMarker;
+let grayLine=null, blueLine=null, traveledLine=null;
+let routeCoords=[], stepsList=[], traveledPts=[];
+let watchId=null, navigating=false, arrivedFired=false;
+let startDistM=0, lastLL=null, routeReady=false;
+let searchTimer=null;
+
+/* ═══════════════════════════════════════
+   MAP INIT
+═══════════════════════════════════════ */
+map = L.map('map',{zoomControl:false,attributionControl:false}).setView([DEST.lat,DEST.lng],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+L.control.zoom({position:'topright'}).addTo(map);
+
+placeDestMarker(DEST.lat, DEST.lng);
+
+/* ═══════════════════════════════════════
+   DESTINATION MARKER
+═══════════════════════════════════════ */
+function placeDestMarker(lat, lng) {
+  if (destMarker) map.removeLayer(destMarker);
+  destMarker = L.marker([lat,lng],{
+    icon:L.divIcon({
+      className:'',
+      html:`<svg width="36" height="48" viewBox="0 0 36 48">
+        <defs><filter id="ds2"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity=".35"/></filter></defs>
+        <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 30 18 30S36 31.5 36 18C36 8.06 27.94 0 18 0z" fill="#ea4335" filter="url(#ds2)"/>
+        <circle cx="18" cy="18" r="7" fill="white"/>
+      </svg>`,
+      iconSize:[36,48],iconAnchor:[18,48]
+    }),
+    zIndexOffset:900
+  }).addTo(map);
+}
+
+/* ═══════════════════════════════════════
+   BOOT
+═══════════════════════════════════════ */
+loading(30);
+geoOnce(pos => {
+  loading(65);
+  const {latitude:lat,longitude:lng,accuracy:acc} = pos.coords;
+  lastLL={lat,lng};
+  placeUser(lat,lng,acc);
+  fitView(lat,lng);
+  fetchRoute(lat,lng);
+}, () => {
+  loading(0);
+  snack('Enable location to use navigation.');
+  map.setView([DEST.lat,DEST.lng],13);
+  enableStart('Start Navigation');
+});
+
+function geoOnce(ok,err){
+  if(!navigator.geolocation){err();return;}
+  navigator.geolocation.getCurrentPosition(ok,err,{enableHighAccuracy:true,timeout:12000});
+}
+
+/* ═══════════════════════════════════════
+   SEARCH UI
+═══════════════════════════════════════ */
+function openSearch() {
+  if (navigating) { snack('Stop navigation before changing destination.'); return; }
+  document.getElementById('destDisplay').style.display   = 'none';
+  document.getElementById('searchInput').style.display   = 'block';
+  document.getElementById('clearBtn').style.display      = 'flex';
+  document.getElementById('statusBadge').style.display   = 'none';
+  document.getElementById('searchCard').classList.add('focused');
+  document.getElementById('sugOverlay').classList.add('show');
+  const inp = document.getElementById('searchInput');
+  inp.value = '';
+  inp.focus();
+  // Show recent / hint
+  showSuggestions(`<div class="sug-none">Type a place name or address to search</div>`);
+}
+
+function closeSearch() {
+  document.getElementById('searchInput').style.display   = 'none';
+  document.getElementById('destDisplay').style.display   = 'block';
+  document.getElementById('clearBtn').style.display      = 'none';
+  document.getElementById('statusBadge').style.display   = 'flex';
+  document.getElementById('searchCard').classList.remove('focused');
+  document.getElementById('suggestions').classList.remove('show');
+  document.getElementById('sugOverlay').classList.remove('show');
+  document.getElementById('searchInput').blur();
+}
+
+function showSuggestions(html) {
+  const el = document.getElementById('suggestions');
+  el.innerHTML = html;
+  el.classList.add('show');
+}
+
+let lastQuery = '';
+function onSearchInput(val) {
+  clearTimeout(searchTimer);
+  if (!val.trim()) {
+    showSuggestions(`<div class="sug-none">Type a place name or address to search</div>`);
+    return;
+  }
+  if (val.trim() === lastQuery) return;
+  showSuggestions(`<div class="sug-loading">Searching…</div>`);
+  searchTimer = setTimeout(() => doSearch(val.trim()), 400);
+}
+
+function onSearchKey(e) {
+  if (e.key === 'Escape') closeSearch();
+  if (e.key === 'Enter') {
+    const val = document.getElementById('searchInput').value.trim();
+    if (val) doSearch(val);
+  }
+}
+
+async function doSearch(query) {
+  lastQuery = query;
+  try {
+    const url = `${NOM}?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=1`;
+    const res  = await fetch(url, { headers:{'Accept-Language':'en'} });
+    const data = await res.json();
+
+    if (!data.length) {
+      showSuggestions(`<div class="sug-none">No results found for "<b>${escHtml(query)}</b>"</div>`);
+      return;
+    }
+
+    const html = data.map(item => {
+      const name  = item.namedetails?.name || item.display_name.split(',')[0];
+      const addr  = item.display_name;
+      const type  = item.type || item.class || 'place';
+      const icon  = placeIcon(item.class, item.type);
+      return `<div class="sug-item" onclick="selectDest(${item.lat},${item.lon},'${escAttr(name)}','${escAttr(addr)}')">
+        <div class="sug-icon">${icon}</div>
+        <div class="sug-text">
+          <div class="sug-name">${escHtml(name)}</div>
+          <div class="sug-addr">${escHtml(addr)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    showSuggestions(html);
+  } catch(e) {
+    showSuggestions(`<div class="sug-none">Search unavailable. Check your connection.</div>`);
+  }
+}
+
+function placeIcon(cls, type) {
+  const map = {
+    amenity:   `<svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13S19 14.25 19 9c0-3.87-3.13-7-7-7z" fill="#1a73e8"/></svg>`,
+    highway:   `<svg width="18" height="18" viewBox="0 0 24 24"><path d="M1.5 5h3l3 14h9l3-14h3" stroke="#0f9d58" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    natural:   `<svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#fbbc04"/></svg>`,
+    tourism:   `<svg width="18" height="18" viewBox="0 0 24 24"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z" fill="#ea4335"/></svg>`,
+  };
+  return map[cls] || `<svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13S19 14.25 19 9c0-3.87-3.13-7-7-7z" fill="#5f6368"/></svg>`;
+}
+
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){ return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+/* ═══════════════════════════════════════
+   SELECT DESTINATION
+═══════════════════════════════════════ */
+function selectDest(lat, lng, name, addr) {
+  lat = parseFloat(lat); lng = parseFloat(lng);
+  DEST = { lat, lng, name, addr };
+
+  // Update UI labels
+  document.getElementById('destTitleTop').textContent  = name;
+  document.getElementById('destSubTop').textContent    = addr.length > 55 ? addr.slice(0,55)+'…' : addr;
+  document.getElementById('sheetDestName').textContent   = name;
+  document.getElementById('sheetDestCoords').textContent = `${lat.toFixed(5)}° N, ${lng.toFixed(5)}° E`;
+
+  // Clear route info
+  document.getElementById('rDist').textContent  = '—';
+  document.getElementById('rTime').textContent  = '—';
+  document.getElementById('rTurns').textContent = '—';
+
+  // Reset route layers
+  [grayLine, blueLine, traveledLine].forEach(l => { if(l) map.removeLayer(l); });
+  grayLine=null; blueLine=null; traveledLine=null;
+  routeCoords=[]; stepsList=[]; startDistM=0;
+  routeReady=false;
+
+  // Move dest marker
+  placeDestMarker(lat, lng);
+
+  closeSearch();
+  snack(`Destination: ${name}`);
+
+  // Disable start while loading
+  const btn = document.getElementById('startBtn');
+  btn.disabled = true;
+  document.getElementById('startBtnLabel').textContent = 'Getting route…';
+
+  // Fetch route from current location (or just from dest if no location yet)
+  if (lastLL) {
+    loading(30);
+    fitView(lastLL.lat, lastLL.lng);
+    fetchRoute(lastLL.lat, lastLL.lng);
+  } else {
+    loading(30);
+    map.setView([lat, lng], 13);
+    fetchRoute(lat, lng); // will use dest→dest but show distance=0; fine
+  }
+}
+
+/* ═══════════════════════════════════════
+   FETCH ROUTE (OSRM)
+═══════════════════════════════════════ */
+async function fetchRoute(fromLat, fromLng) {
+  try {
+    const url = `${OSRM}/${fromLng},${fromLat};${DEST.lng},${DEST.lat}?overview=full&geometries=geojson&steps=true`;
+    const res  = await fetch(url);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    if(!data.routes?.length) throw new Error('No routes');
+
+    const route = data.routes[0];
+    startDistM  = route.distance;
+    routeCoords = route.geometry.coordinates.map(c=>[c[1],c[0]]);
+
+    stepsList=[];
+    for(const leg of route.legs)
+      for(const s of leg.steps)
+        stepsList.push({maneuver:s.maneuver,name:s.name||'',distance:s.distance});
+
+    drawFullRoute(routeCoords);
+
+    document.getElementById('rDist').textContent  = fmtDist(route.distance);
+    document.getElementById('rTime').textContent  = fmtMins(Math.round(route.duration/60));
+    document.getElementById('rTurns').textContent = stepsList.length;
+
+    loading(0); routeReady=true;
+    enableStart('Start Navigation');
+  } catch(e) {
+    console.warn('OSRM:',e);
+    snack('Routing unavailable – using direct line.');
+    routeCoords=[[fromLat,fromLng],[DEST.lat,DEST.lng]];
+    drawFullRoute(routeCoords);
+    const d = haversine(fromLat,fromLng,DEST.lat,DEST.lng);
+    document.getElementById('rDist').textContent  = fmtDist(d);
+    document.getElementById('rTime').textContent  = fmtMins(Math.round(d/10/60));
+    document.getElementById('rTurns').textContent = '—';
+    loading(0); routeReady=true;
+    enableStart('Start Navigation');
+  }
+}
+
+function drawFullRoute(coords) {
+  if(grayLine) map.removeLayer(grayLine);
+  if(blueLine) map.removeLayer(blueLine);
+  grayLine = L.polyline(coords,{color:'#fff',weight:10,opacity:.9,lineJoin:'round'}).addTo(map);
+  blueLine = L.polyline(coords,{color:'#1a73e8',weight:6,opacity:1,lineJoin:'round'}).addTo(map);
+}
+
+/* ═══════════════════════════════════════
+   USER MARKER
+═══════════════════════════════════════ */
+function placeUser(lat,lng,acc){
+  const html=`<div style="position:relative;width:46px;height:46px;display:flex;align-items:center;justify-content:center;">
+    <div class="u-ring" style="position:absolute;width:46px;height:46px;border-radius:50%;background:rgba(26,115,232,.2);"></div>
+    <div style="width:18px;height:18px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 2px 8px rgba(26,115,232,.55);"></div>
+  </div>`;
+  const icon=L.divIcon({className:'',html,iconSize:[46,46],iconAnchor:[23,23]});
+  if(!userMarker) userMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map);
+  else userMarker.setLatLng([lat,lng]);
+  if(acc&&acc<150){
+    if(accCircle) map.removeLayer(accCircle);
+    accCircle=L.circle([lat,lng],{radius:acc,color:'#1a73e8',fillColor:'#4285f4',fillOpacity:.07,weight:1,opacity:.4}).addTo(map);
+  }
+}
+
+/* ═══════════════════════════════════════
+   NAVIGATION CONTROL
+═══════════════════════════════════════ */
+function startNav(){
+  if(!navigator.geolocation){snack('Geolocation not supported.');return;}
+  navigating=true; arrivedFired=false; traveledPts=[];
+  document.getElementById('prePanel').style.display  = 'none';
+  document.getElementById('tripPanel').style.display = 'block';
+  document.getElementById('statusBadge').textContent  = 'Navigating';
+  document.getElementById('statusBadge').className    = 'status-badge nav';
+  document.getElementById('turnCard').classList.add('show');
+  watchId=navigator.geolocation.watchPosition(onPosition,onGeoErr,{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+}
+
+function stopNav(){
+  navigating=false;
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  document.getElementById('tripPanel').style.display  = 'none';
+  document.getElementById('prePanel').style.display   = 'block';
+  document.getElementById('statusBadge').textContent   = 'Ready';
+  document.getElementById('statusBadge').className     = 'status-badge';
+  document.getElementById('turnCard').classList.remove('show');
+  if(routeCoords.length) drawFullRoute(routeCoords);
+  if(traveledLine){map.removeLayer(traveledLine);traveledLine=null;}
+  snack('Navigation stopped.');
+}
+
+/* ═══════════════════════════════════════
+   POSITION UPDATE
+═══════════════════════════════════════ */
+function onPosition(pos){
+  const lat=pos.coords.latitude, lng=pos.coords.longitude, spd=pos.coords.speed;
+  lastLL={lat,lng};
+  placeUser(lat,lng,pos.coords.accuracy);
+  if(!navigating){map.panTo([lat,lng],{animate:true,duration:.6});return;}
+
+  traveledPts.push([lat,lng]);
+  const idx      = nearestRouteIdx(lat,lng);
+  const remCoords= [[lat,lng],...routeCoords.slice(idx+1)];
+  const travCoords=[...routeCoords.slice(0,idx+1),[lat,lng]];
+
+  if(grayLine)    map.removeLayer(grayLine);
+  if(blueLine)    map.removeLayer(blueLine);
+  if(traveledLine)map.removeLayer(traveledLine);
+
+  grayLine    = L.polyline(routeCoords,{color:'#fff',weight:10,opacity:.8,lineJoin:'round'}).addTo(map);
+  traveledLine= L.polyline(travCoords,{color:'#9aa0a6',weight:6,opacity:.75,lineJoin:'round'}).addTo(map);
+  blueLine    = L.polyline(remCoords,{color:'#1a73e8',weight:7,opacity:1,lineJoin:'round'}).addTo(map);
+
+  const remM  = routeRemaining(idx);
+  if(startDistM===0) startDistM=remM;
+  const travM = Math.max(0,startDistM-remM);
+  const pct   = Math.min(100,startDistM>0?(travM/startDistM)*100:0);
+  const avgSpd= spd&&spd>0.5?spd:10/3.6;
+  const spdKmh= spd!=null&&spd>=0.3?Math.round(spd*3.6):null;
+  const etaMin= Math.max(0,Math.round(remM/avgSpd/60));
+
+  document.getElementById('tsRem').textContent  = fmtDist(remM);
+  document.getElementById('tsTrav').textContent = fmtDist(travM);
+  document.getElementById('tsSpd').textContent  = spdKmh!=null?spdKmh+' km/h':'— km/h';
+  document.getElementById('etaBig').textContent = clockTime(etaMin);
+  document.getElementById('etaSub').textContent = fmtDist(remM)+' remaining';
+  document.getElementById('progFill').style.width = pct+'%';
+  document.getElementById('progPct').textContent  = Math.round(pct)+'%';
+
+  updateTurn(lat,lng,remM);
+  map.panTo([lat,lng],{animate:true,duration:.5});
+
+  if(!arrivedFired&&remM<=ARRIVE_M){
+    arrivedFired=true; stopNav();
+    document.getElementById('arrSub').textContent=`Traveled ${fmtDist(travM)} · ${fmtMins(Math.round(travM/avgSpd/60))} trip`;
+    document.getElementById('arrivedOverlay').classList.add('show');
+  }
+}
+function onGeoErr(e){console.warn('GPS:',e.message);}
+
+/* ═══════════════════════════════════════
+   ROUTE HELPERS
+═══════════════════════════════════════ */
+function nearestRouteIdx(lat,lng){
+  let best=0,bestD=Infinity;
+  routeCoords.forEach((c,i)=>{const d=haversine(lat,lng,c[0],c[1]);if(d<bestD){bestD=d;best=i;}});
+  return best;
+}
+function routeRemaining(from){
+  let sum=0;
+  for(let i=from;i<routeCoords.length-1;i++)
+    sum+=haversine(routeCoords[i][0],routeCoords[i][1],routeCoords[i+1][0],routeCoords[i+1][1]);
+  return sum;
+}
+
+/* ═══════════════════════════════════════
+   TURN BAR
+═══════════════════════════════════════ */
+function updateTurn(lat,lng,remM){
+  if(!stepsList.length)return;
+  let nearest=stepsList[0],nearestD=Infinity;
+  for(const s of stepsList){
+    if(!s.maneuver?.location)continue;
+    const d=haversine(lat,lng,s.maneuver.location[1],s.maneuver.location[0]);
+    if(d<nearestD){nearestD=d;nearest=s;}
+  }
+  const type=nearest.maneuver?.type||'continue', mod=nearest.maneuver?.modifier||'';
+  document.getElementById('turnArrow').textContent=mIcon(type,mod);
+  document.getElementById('turnMain').textContent =mText(type,mod,nearest.name);
+  document.getElementById('turnDistTxt').textContent=nearestD<2000?'In '+fmtDist(nearestD):fmtDist(remM)+' to destination';
+}
+function mIcon(t,m){
+  if(t==='arrive')return'🏁';if(t==='roundabout')return'↻';
+  if(t==='turn'){if(m.includes('left'))return'←';if(m.includes('right'))return'→';}
+  if(t==='fork')return m.includes('left')?'↖':'↗';
+  return'↑';
+}
+function mText(t,m,n){
+  const r=n?' on '+n:'';
+  if(t==='arrive')return'Arrive at destination';
+  if(t==='depart')return'Head '+m+r;
+  if(t==='turn'){
+    if(m==='left')return'Turn left'+r;if(m==='right')return'Turn right'+r;
+    if(m==='sharp left')return'Sharp left'+r;if(m==='sharp right')return'Sharp right'+r;
+    if(m==='slight left')return'Keep left'+r;if(m==='slight right')return'Keep right'+r;
+    if(m==='uturn')return'Make a U-turn';
+  }
+  if(t==='roundabout')return'Enter roundabout';
+  if(t==='merge')return'Merge'+r;
+  if(t==='fork')return(m.includes('left')?'Keep left':'Keep right')+r;
+  return'Continue'+r;
+}
+
+/* ═══════════════════════════════════════
+   UI UTILITIES
+═══════════════════════════════════════ */
+function fitView(lat,lng){
+  map.fitBounds(L.latLngBounds([[lat,lng],[DEST.lat,DEST.lng]]),{padding:[60,60]});
+}
+function recenter(){
+  if(lastLL)map.setView([lastLL.lat,lastLL.lng],16,{animate:true});
+  else snack('Location not available yet.');
+}
+function enableStart(label){
+  document.getElementById('startBtnLabel').textContent=label;
+  document.getElementById('startBtn').disabled=false;
+}
+function closeArrived(){document.getElementById('arrivedOverlay').classList.remove('show');}
+function loading(pct){
+  const b=document.getElementById('lbar');
+  if(pct===0){setTimeout(()=>{b.style.transition='none';b.style.width='0%';},400);}
+  else{b.style.transition='width .35s ease';b.style.width=pct+'%';}
+}
+function snack(msg){
+  const el=document.getElementById('snack');
+  el.textContent=msg;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),3400);
+}
+
+/* ═══════════════════════════════════════
+   MATH
+═══════════════════════════════════════ */
+function haversine(a,b,c,d){
+  const R=6371000,φ1=a*Math.PI/180,φ2=c*Math.PI/180,Δφ=(c-a)*Math.PI/180,Δλ=(d-b)*Math.PI/180;
+  return R*2*Math.atan2(Math.sqrt(Math.sin(Δφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2),
+    Math.sqrt(1-(Math.sin(Δφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2)));
+}
+function fmtDist(m){return m>=1000?(m/1000).toFixed(1)+' km':Math.round(m)+' m';}
+function fmtMins(m){if(m<1)return'< 1 min';if(m<60)return m+' min';return Math.floor(m/60)+' h '+(m%60)+' min';}
+function clockTime(add){
+  const d=new Date(Date.now()+add*60000);
+  let h=d.getHours(),mi=d.getMinutes(),ap=h>=12?'PM':'AM';
+  h=h%12||12;return h+':'+(mi<10?'0':'')+mi+' '+ap;
+}
+</script>
+</body>
+</html>
